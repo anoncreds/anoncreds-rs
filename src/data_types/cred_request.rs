@@ -4,7 +4,7 @@ use crate::cl::{
 };
 use crate::error::{Result, ValidationError};
 use crate::invalid;
-use crate::utils::validation::{LEGACY_DID_IDENTIFIER, Validatable, is_uri_identifier};
+use crate::utils::validation::{Validatable, is_legacy_did, is_uri_identifier};
 
 use super::{cred_def::CredentialDefinitionId, nonce::Nonce};
 
@@ -35,9 +35,7 @@ impl Validatable for CredentialRequest {
             None => {
                 if self.cred_def_id.is_legacy_cred_def_identifier() {
                     if let Some(prover_did) = self.prover_did.as_deref() {
-                        if is_uri_identifier(prover_did)
-                            || LEGACY_DID_IDENTIFIER.captures(prover_did).is_some()
-                        {
+                        if is_uri_identifier(prover_did) || is_legacy_did(prover_did) {
                             Ok(())
                         } else {
                             Err(invalid!("Prover did was supplied, not valid"))
@@ -204,6 +202,68 @@ mod cred_req_tests {
         );
 
         assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn create_credential_request_with_valid_input_legacy_indy_short_encoding() -> Result<()> {
+        let (cred_def, correctness_proof) = cred_def()?;
+        let link_secret = link_secret();
+        let credential_offer = credential_offer(correctness_proof, true)?;
+
+        // 16 bytes with two leading zero bytes encode to 20 base58 characters.
+        let res = create_credential_request(
+            None,
+            Some("11g62HY3FiTmGsapkdRA"),
+            &cred_def,
+            &link_secret,
+            LINK_SECRET_ID,
+            &credential_offer,
+        );
+
+        assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn create_credential_request_with_valid_input_legacy_indy_32_bytes() -> Result<()> {
+        let (cred_def, correctness_proof) = cred_def()?;
+        let link_secret = link_secret();
+        let credential_offer = credential_offer(correctness_proof, true)?;
+
+        let res = create_credential_request(
+            None,
+            Some("44PMwfFs4tfN4ujLy5xwpiGxQfa9abP5HFYtub8vgHXn"),
+            &cred_def,
+            &link_secret,
+            LINK_SECRET_ID,
+            &credential_offer,
+        );
+
+        assert!(res.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn create_credential_request_with_invalid_legacy_indy_length() -> Result<()> {
+        let (cred_def, correctness_proof) = cred_def()?;
+        let link_secret = link_secret();
+        let credential_offer = credential_offer(correctness_proof, true)?;
+
+        // 22 base58 characters, but 17 bytes.
+        let res = create_credential_request(
+            None,
+            Some("kTXDKzbFrZzPiBVDKJ8eXJ"),
+            &cred_def,
+            &link_secret,
+            LINK_SECRET_ID,
+            &credential_offer,
+        );
+
+        assert!(res.is_err());
 
         Ok(())
     }

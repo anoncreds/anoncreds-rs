@@ -31,6 +31,14 @@ pub fn is_uri_identifier(id: &str) -> bool {
     URI_IDENTIFIER.captures(id).is_some()
 }
 
+/// A legacy indy DID is the base58 encoding of a 16 or 32 byte value. Leading zero bytes make the
+/// encoding shorter, so this checks the decoded length rather than the number of characters.
+pub fn is_legacy_did(did: &str) -> bool {
+    bs58::decode(did)
+        .into_vec()
+        .is_ok_and(|did| did.len() == 16 || did.len() == 32)
+}
+
 /// Macro to return a new `ValidationError` with an optional message
 #[macro_export]
 macro_rules! invalid {
