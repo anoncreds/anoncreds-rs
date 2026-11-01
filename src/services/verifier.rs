@@ -713,9 +713,21 @@ fn precess_filed(filed: &str, filter_value: impl Into<String>, tag_value: &str) 
 fn is_attr_internal_tag(key: &str, attr_value_map: &HashMap<String, Option<String>>) -> bool {
     INTERNAL_TAG_MATCHER.captures(key).map_or(false, |caps| {
         caps.get(1).map_or(false, |s| {
-            attr_value_map.contains_key(&s.as_str().to_string())
+            attr_values(s.as_str(), attr_value_map).next().is_some()
         })
     })
+}
+
+// Attribute names are case insensitive with spaces ignored, in restrictions too.
+fn attr_values<'a>(
+    attr_name: &str,
+    attr_value_map: &'a HashMap<String, Option<String>>,
+) -> impl Iterator<Item = &'a Option<String>> {
+    let attr_name = attr_common_view(attr_name);
+    attr_value_map
+        .iter()
+        .filter(move |(key, _)| attr_common_view(key) == attr_name)
+        .map(|(_, value)| value)
 }
 
 fn check_internal_tag_revealed_value(
@@ -729,7 +741,7 @@ fn check_internal_tag_revealed_value(
         .get(1)
         .ok_or_else(|| err_msg!(InvalidState, "No name has been parsed",))?
         .as_str();
-    if let Some(Some(revealed_value)) = attr_value_map.get(attr_name) {
+    for revealed_value in attr_values(attr_name, attr_value_map).flatten() {
         if *revealed_value != tag_value {
             return Err(err_msg!(
                 ProofRejected,
@@ -1280,6 +1292,25 @@ mod tests {
 
         op = Query::Eq(attr_tag_value(), value.to_string());
         assert!(_process_operator("zip", &op, &filter, Some("NOT HERE")).is_err());
+    }
+
+    #[test]
+    fn test_process_op_eq_revealed_value_name_case_insensitive() {
+        let filter = filter();
+        let value = "value";
+
+        let mut op = Query::Eq("attr::ZIP::value".to_string(), value.to_string());
+        _process_operator("zip", &op, &filter, Some(value)).unwrap();
+
+        op = Query::Eq(attr_tag_value(), value.to_string());
+        _process_operator("Z ip", &op, &filter, Some(value)).unwrap();
+        assert!(_process_operator("Z ip", &op, &filter, Some("NOT HERE")).is_err());
+        assert!(_process_operator("Zip Code", &op, &filter, Some(value)).is_err());
+
+        let mut attr_value_map = HashMap::new();
+        attr_value_map.insert("zip".to_string(), None);
+        attr_value_map.insert("Zip".to_string(), Some("NOT HERE".to_string()));
+        assert!(process_operator(&attr_value_map, &op, &filter).is_err());
     }
 
     fn _received() -> HashMap<String, Identifier> {
