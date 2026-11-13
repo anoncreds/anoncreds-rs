@@ -197,7 +197,7 @@ jobs:
     needs: [build-release]
 
     env:
-      PYTHON_VERSION: "3.8"
+      PYTHON_VERSION: "3.12"
 
     strategy:
       matrix:
