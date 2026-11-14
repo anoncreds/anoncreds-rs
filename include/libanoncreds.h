@@ -583,7 +583,7 @@ ErrorCode anoncreds_w3c_credential_from_json(struct ByteBuffer json, ObjectHandl
 
 /**
  * Get credential signature information required for proof building and verification
- * This information is aggregated from `anoncredsvc-2023` and `anoncredspresvc-2023` proofs.
+ * This information is aggregated from the `anoncreds-2023` proof.
  * It's needed for Holder and Verifier for public entities resolving
  *     {`schema_id`, `cred_def_id`, `rev_reg_id`, `rev_reg_index`, `timestamp`}
  *
