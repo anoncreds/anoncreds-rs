@@ -38,7 +38,7 @@ pub struct Filter {
 }
 
 static INTERNAL_TAG_MATCHER: Lazy<Regex> =
-    Lazy::new(|| Regex::new("^attr::([^:]+)::(value|marker)$").unwrap());
+    Lazy::new(|| Regex::new("^attr::([^:]+)::value$").unwrap());
 
 /// Verify an incoming proof presentation
 pub fn verify_presentation(
@@ -675,10 +675,12 @@ fn process_filter(
         tag_ @ ("issuer_did" | "issuer_id") => {
             precess_filed(tag_, filter.issuer_id.clone(), tag_value)
         }
+        // A marker only asks that the attribute exist, so its "1" is never
+        // compared with a revealed value.
+        key if is_attr_operator(key) => Ok(()),
         key if is_attr_internal_tag(key, attr_value_map) => {
             check_internal_tag_revealed_value(key, tag_value, attr_value_map)
         }
-        key if is_attr_operator(key) => Ok(()),
         _ => Err(err_msg!("Unknown Filter Type")),
     }
 }
@@ -1280,6 +1282,20 @@ mod tests {
 
         op = Query::Eq(attr_tag_value(), value.to_string());
         assert!(_process_operator("zip", &op, &filter, Some("NOT HERE")).is_err());
+    }
+
+    #[test]
+    fn test_process_op_eq_marker_on_revealed_value() {
+        let filter = filter();
+
+        let mut op = Query::Eq(attr_tag(), "1".to_string());
+        _process_operator("zip", &op, &filter, Some("value")).unwrap();
+
+        op = Query::Or(vec![Query::And(vec![
+            Query::Eq(attr_tag(), "1".to_string()),
+            Query::Eq(cred_def_id_tag(), CRED_DEF_ID.to_string()),
+        ])]);
+        _process_operator("zip", &op, &filter, Some("value")).unwrap();
     }
 
     fn _received() -> HashMap<String, Identifier> {
