@@ -36,6 +36,17 @@ impl Validatable for CredentialSubject {
     }
 }
 
+impl CredentialAttributeValue {
+    /// A raw value is a number only when writing the number back gives the raw value, so a value
+    /// with leading zeros, such as "00123", stays a string as issued.
+    pub(crate) fn from_raw(raw: &str) -> Self {
+        match raw.parse::<i32>() {
+            Ok(number) if number.to_string() == raw => CredentialAttributeValue::Number(number),
+            _ => CredentialAttributeValue::String(raw.to_string()),
+        }
+    }
+}
+
 impl From<&CredentialValues> for CredentialSubject {
     fn from(values: &CredentialValues) -> Self {
         CredentialSubject(
@@ -43,17 +54,10 @@ impl From<&CredentialValues> for CredentialSubject {
                 .0
                 .iter()
                 .map(|(attribute, values)| {
-                    if let Ok(number) = values.raw.parse::<i32>() {
-                        (
-                            attribute.to_string(),
-                            CredentialAttributeValue::Number(number),
-                        )
-                    } else {
-                        (
-                            attribute.to_string(),
-                            CredentialAttributeValue::String(values.raw.to_string()),
-                        )
-                    }
+                    (
+                        attribute.to_string(),
+                        CredentialAttributeValue::from_raw(&values.raw),
+                    )
                 })
                 .collect(),
         )

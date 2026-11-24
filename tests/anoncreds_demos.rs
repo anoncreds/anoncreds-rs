@@ -192,6 +192,132 @@ fn anoncreds_demo_works_for_single_issuer_single_prover(
 #[rstest]
 #[case(CredentialFormat::Legacy, PresentationFormat::Legacy)]
 #[case(CredentialFormat::W3C, PresentationFormat::W3C)]
+fn anoncreds_demo_works_for_numeric_attribute_with_leading_zeros(
+    #[case] credential_format: CredentialFormat,
+    #[case] presentation_format: PresentationFormat,
+) {
+    // Create pseudo ledger and wallets
+    let mut ledger = Ledger::default();
+    let mut issuer_wallet = IssuerWallet::default();
+    let mut prover_wallet = ProverWallet::default();
+    let verifier_wallet = VerifierWallet::default();
+
+    // Create schema
+    let (gvt_schema, gvt_schema_id) = issuer_wallet.create_schema(&mut ledger, GVT_CRED);
+
+    // Create credential definition
+    let (gvt_cred_def, gvt_cred_def_id) =
+        issuer_wallet.create_cred_def(&mut ledger, &gvt_schema, false);
+
+    // Issuer creates a Credential Offer
+    let cred_offer = issuer_wallet.create_credential_offer(&gvt_schema_id, &gvt_cred_def_id);
+
+    // Prover creates a Credential Request
+    let (cred_request, cred_request_metadata) =
+        prover_wallet.create_credential_request(&gvt_cred_def, &cred_offer);
+
+    // Issuer creates a credential whose id is a number with a leading zero
+    let mut cred_values = fixtures::credential_values(GVT_CRED);
+    cred_values
+        .add_raw("id", "01234567890")
+        .expect("Error encoding attribute");
+    let issue_cred = issuer_wallet.create_credential(
+        &credential_format,
+        &gvt_cred_def_id,
+        &cred_offer,
+        &cred_request,
+        cred_values.into(),
+        None,
+        None,
+        None,
+        None,
+    );
+
+    // Prover receives the credential and processes it
+    let mut recv_cred = issue_cred;
+    prover_wallet.store_credential(
+        GVT_CRED,
+        &mut recv_cred,
+        &cred_request_metadata,
+        &gvt_cred_def,
+        None,
+    );
+
+    // Verifier creates a presentation request bound to the issued id
+    let nonce = verifier_wallet.generate_nonce();
+    let pres_request = serde_json::from_value(json!({
+        "nonce": nonce,
+        "name":"pres_req_1",
+        "version":"0.1",
+        "requested_attributes":{
+            "attr1_referent":{
+                "name":"id",
+                "restrictions": {"attr::id::value": "01234567890"}
+            }
+        },
+        "requested_predicates":{
+            "predicate1_referent":{"name":"age","p_type":">=","p_value":18}
+        }
+    }))
+    .expect("Error creating proof request");
+
+    let schemas = ledger.resolve_schemas(vec![&gvt_schema_id]);
+    let cred_defs = ledger.resolve_cred_defs(vec![&gvt_cred_def_id]);
+
+    // Prover creates presentation
+    let present_credentials = vec![CredentialToPresent {
+        id: GVT_CRED.to_string(),
+        attributes: vec![
+            PresentAttribute {
+                referent: "attr1_referent".to_string(),
+                form: PresentAttributeForm::RevealedAttribute,
+            },
+            PresentAttribute {
+                referent: "predicate1_referent".to_string(),
+                form: PresentAttributeForm::Predicate,
+            },
+        ],
+    }];
+
+    let presentation = prover_wallet.create_presentation(
+        &presentation_format,
+        &schemas,
+        &cred_defs,
+        &pres_request,
+        &present_credentials,
+        None,
+        None,
+    );
+
+    let valid = verifier_wallet
+        .verify_presentation(
+            &presentation,
+            &pres_request,
+            &schemas,
+            &cred_defs,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+    assert!(valid);
+
+    verifier_wallet.check_presentation_attribute(
+        &presentation,
+        PresentedAttribute {
+            referent: "attr1_referent",
+            name: "id",
+            expected: ExpectedAttributeValue::RevealedAttribute(CredentialAttributeValue::String(
+                "01234567890".to_string(),
+            )),
+        },
+    );
+}
+
+#[rstest]
+#[case(CredentialFormat::Legacy, PresentationFormat::Legacy)]
+#[case(CredentialFormat::W3C, PresentationFormat::W3C)]
 fn anoncreds_demo_works_with_revocation_for_single_issuer_single_prover(
     #[case] credential_format: CredentialFormat,
     #[case] presentation_format: PresentationFormat,
