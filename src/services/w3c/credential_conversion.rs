@@ -233,6 +233,7 @@ pub(crate) mod tests {
     use crate::data_types::w3c::constants::ANONCREDS_CREDENTIAL_TYPES;
     use crate::data_types::w3c::constants::{ANONCREDS_VC_1_1_CONTEXTS, ANONCREDS_VC_2_0_CONTEXTS};
     use crate::data_types::w3c::context::Contexts;
+    use crate::data_types::w3c::credential_attributes::CredentialAttributeValue;
     use crate::data_types::w3c::one_or_many::OneOrMany;
     use crate::data_types::w3c::proof::tests::{
         cl_credential_signature, cl_credential_signature_correctness_proof,
@@ -328,6 +329,41 @@ pub(crate) mod tests {
             None,
         )
         .expect("unable to convert credential to w3c form");
+        let legacy_credential = credential_from_w3c(&w3c_credential)
+            .expect("unable to convert credential to legacy form");
+        assert_eq!(json!(original_legacy_credential), json!(legacy_credential),)
+    }
+
+    #[test]
+    fn test_convert_credential_with_leading_zero_values_to_and_from_w3c() {
+        let mut values = MakeCredentialValues::default();
+        values.add_raw("name", "01234567890").unwrap();
+        values.add_raw("height", "00178").unwrap();
+        values.add_raw("age", "20").unwrap();
+        let original_legacy_credential = Credential {
+            values: values.into(),
+            ..legacy_credential()
+        };
+
+        let w3c_credential = credential_to_w3c(
+            &original_legacy_credential,
+            &credential_definition().issuer_id,
+            None,
+        )
+        .expect("unable to convert credential to w3c form");
+        assert_eq!(
+            w3c_credential.credential_subject.0["name"],
+            CredentialAttributeValue::String("01234567890".to_owned())
+        );
+        assert_eq!(
+            w3c_credential.credential_subject.0["height"],
+            CredentialAttributeValue::String("00178".to_owned())
+        );
+        assert_eq!(
+            w3c_credential.credential_subject.0["age"],
+            CredentialAttributeValue::Number(20)
+        );
+
         let legacy_credential = credential_from_w3c(&w3c_credential)
             .expect("unable to convert credential to legacy form");
         assert_eq!(json!(original_legacy_credential), json!(legacy_credential),)
